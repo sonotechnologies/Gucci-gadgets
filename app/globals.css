@@ -109,6 +109,30 @@
   .card {
     @apply rounded-card border border-border bg-bg;
   }
+  /* Dual-thumb price slider: only the thumbs take pointer events. */
+  .range-thumb::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    pointer-events: auto;
+    height: 22px;
+    width: 22px;
+    border-radius: 999px;
+    background: var(--bg);
+    border: 2px solid var(--accent);
+    cursor: pointer;
+  }
+  .range-thumb::-moz-range-thumb {
+    pointer-events: auto;
+    height: 18px;
+    width: 18px;
+    border-radius: 999px;
+    background: var(--bg);
+    border: 2px solid var(--accent);
+    cursor: pointer;
+  }
+  .range-thumb::-webkit-slider-runnable-track,
+  .range-thumb::-moz-range-track {
+    background: transparent;
+  }
   .no-scrollbar {
     scrollbar-width: none;
   }
