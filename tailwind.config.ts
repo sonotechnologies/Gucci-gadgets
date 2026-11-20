@@ -39,6 +39,7 @@ export default {
         h1: ["32px", "38px"],
       },
       borderRadius: { card: "12px", btn: "10px" },
+      boxShadow: { float: "var(--shadow-float)" },
       maxWidth: { site: "1280px" },
       transitionTimingFunction: { out: "cubic-bezier(0.16, 1, 0.3, 1)" },
       keyframes: {
