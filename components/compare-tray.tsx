@@ -20,6 +20,7 @@ export function CompareTray() {
       inert={!show}
       className={cn(
         "fixed bottom-3 left-1/2 z-[35] flex w-[min(560px,calc(100%-24px))] items-center gap-2.5 rounded-card border border-border bg-bg py-2.5 pl-3.5 pr-2.5 shadow-float transition-[transform,opacity] duration-[250ms] ease-out md:bottom-5",
+        pathname.startsWith("/product/") && "max-md:bottom-[84px]",
         show ? "-translate-x-1/2 translate-y-0 opacity-100" : "pointer-events-none -translate-x-1/2 translate-y-6 opacity-0",
       )}
     >

@@ -27,7 +27,8 @@ export function WhatsAppFab() {
   const pathname = usePathname();
   const hydrated = useHydrated();
   const trayUp = useCompare((s) => s.items.length > 0) && hydrated && pathname !== "/compare";
-  const hasBottomBar = pathname.startsWith("/product/") || pathname === "/swap";
+  const onProduct = pathname.startsWith("/product/");
+  const hasBottomBar = pathname === "/swap";
   return (
     <a
       href={waLink(settings.whatsapp_number, "Hello Gucci Gadgets 👋")}
@@ -37,6 +38,8 @@ export function WhatsAppFab() {
       className={cn(
         "fixed right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-whatsapp text-ink shadow-[0_6px_20px_rgba(0,0,0,.18)] transition-[bottom] duration-200 ease-out hover:no-underline md:right-5",
         trayUp ? "bottom-[92px]" : hasBottomBar ? "bottom-[92px] md:bottom-5" : "bottom-5",
+        // Product pages already have a WhatsApp button in the mobile sticky bar.
+        onProduct && "max-md:hidden",
       )}
     >
       <MessageCircle size={24} strokeWidth={1.75} />
