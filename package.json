@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "seed:sql": "tsx scripts/gen-seed-sql.ts"
+    "seed:sql": "tsx scripts/gen-seed-sql.ts",
+    "images:generate": "tsx scripts/product-image-spec.ts > .product-image-spec.json && python3 scripts/gen-product-images.py .product-image-spec.json public/products && tsx scripts/gen-image-update-sql.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

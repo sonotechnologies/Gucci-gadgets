@@ -21,17 +21,16 @@ import type {
   Variant,
 } from "./types";
 
-// Generic placeholder product photos (replace with the client's own shots).
-const U = (id: string) => `https://images.unsplash.com/${id}?w=1200&h=1200&q=75&auto=format&fit=crop`;
-export const IMG = {
-  proTitanium: U("photo-1736191550786-46a46aa47394"),
-  classic: U("photo-1570642193983-c5c23fc09eba"),
-  galaxy: U("photo-1621761191319-c6fb62004040"),
-  device: U("photo-1692729928780-dc35089aaaa1"),
-  proMax: U("photo-1740721610016-ce8577141b78"),
-  pixel: U("photo-1687858477693-7c5bf4396674"),
-  accessory: U("photo-1750055401941-eaa6949496f1"),
-};
+/**
+ * Generic, logo-free product renders served from public/products/ (made by
+ * scripts/gen-product-images.py). Phones get 3 shots, everything else 1.
+ * Replace them with real photos from Admin → Products.
+ */
+function localImages(slug: string, category: Category): string[] {
+  const n = category === "phone" ? 3 : 1;
+  return Array.from({ length: n }, (_, i) => `/products/${slug}-${i + 1}.webp`);
+}
+
 
 /** Deterministic UUIDs so seed.sql and demo mode share ids. */
 function uid(prefix: number, n: number): string {
@@ -57,7 +56,6 @@ interface Def {
   condition: Condition;
   description: string;
   specs: Specs;
-  images: string[];
   /** [storage label or null, price, old price?] */
   storage: [string | null, number, number?][];
   colours: (string | null)[];
@@ -80,7 +78,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "Apple's biggest Pro with the longest battery life in an iPhone. Sealed in box, with a 12-month warranty.",
     specs: { display: '6.9" OLED, 120Hz ProMotion', chip: "A19 Pro", ram: "12GB", camera: "48MP main · 48MP ultra-wide · 48MP 4× telephoto", battery_mah: 4832, os: "iOS 26", network: iosNet },
-    images: [IMG.proMax, IMG.proTitanium, IMG.classic],
     storage: [["256GB", 2650000], ["512GB", 3050000], ["1TB", 3500000]],
     colours: ["Cosmic Orange", "Deep Blue", "Silver"],
     tags: ["new_arrival", "best_seller"],
@@ -93,7 +90,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "Pro cameras and the A19 Pro chip in the 6.3-inch size. Sealed in box, with a 12-month warranty.",
     specs: { display: '6.3" OLED, 120Hz ProMotion', chip: "A19 Pro", ram: "12GB", camera: "48MP main · 48MP ultra-wide · 48MP 4× telephoto", battery_mah: 4252, os: "iOS 26", network: iosNet },
-    images: [IMG.proTitanium, IMG.proMax, IMG.classic],
     storage: [["256GB", 2300000], ["512GB", 2700000], ["1TB", 3150000]],
     colours: ["Cosmic Orange", "Deep Blue", "Silver"],
     tags: ["new_arrival"],
@@ -106,7 +102,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "The everyday iPhone, now with a 120Hz display. Sealed in box, with a 12-month warranty.",
     specs: { display: '6.3" OLED, 120Hz ProMotion', chip: "A19", ram: "8GB", camera: "48MP main · 48MP ultra-wide", battery_mah: 3692, os: "iOS 26", network: iosNet },
-    images: [IMG.classic, IMG.proTitanium],
     storage: [["256GB", 1650000], ["512GB", 2000000]],
     colours: ["Lavender", "Sage", "Mist Blue", "Black"],
     tags: ["new_arrival"],
@@ -119,7 +114,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "Last year's standard iPhone at a lower price. Camera Control button and Action button.",
     specs: { display: '6.1" OLED, 60Hz', chip: "A18", ram: "8GB", camera: "48MP main · 12MP ultra-wide", battery_mah: 3561, os: "iOS 26", network: iosNet },
-    images: [IMG.classic, IMG.proTitanium],
     storage: [["128GB", 1180000, 1290000], ["256GB", 1380000, 1490000]],
     colours: ["Ultramarine", "Teal", "Black", "White"],
     tags: ["deal", "price_drop"],
@@ -133,7 +127,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "Samsung's flagship with the built-in S Pen and a 200MP camera. Sealed in box.",
     specs: { display: '6.9" AMOLED, 120Hz', chip: "Snapdragon 8 Elite for Galaxy", ram: "12GB", camera: "200MP main · 50MP 5× · 10MP 3× · 50MP ultra-wide", battery_mah: 5000, os: "Android 16 · One UI 8", network: dualNet },
-    images: [IMG.galaxy, IMG.device],
     storage: [["256GB", 1890000, 2050000], ["512GB", 2150000, 2300000]],
     colours: ["Titanium Silverblue", "Titanium Black", "Titanium Gray"],
     tags: ["deal", "best_seller"],
@@ -147,7 +140,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "A dependable mid-range Samsung with a big battery and six years of updates.",
     specs: { display: '6.7" AMOLED, 120Hz', chip: "Exynos 1580", ram: "8GB", camera: "50MP main · 12MP ultra-wide · 5MP macro", battery_mah: 5000, os: "Android 16 · One UI 8", network: dualNet },
-    images: [IMG.galaxy],
     storage: [["128GB", 520000], ["256GB", 590000]],
     colours: ["Awesome Navy", "Awesome Lilac", "Gray"],
     age: 30,
@@ -159,7 +151,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "Google's clean Android with the best point-and-shoot camera in its class.",
     specs: { display: '6.3" OLED, 120Hz', chip: "Google Tensor G5", ram: "12GB", camera: "48MP main · 13MP ultra-wide · 10.8MP 5× telephoto", battery_mah: 4970, os: "Android 16", network: iosNet },
-    images: [IMG.pixel, IMG.device],
     storage: [["128GB", 1150000], ["256GB", 1300000]],
     colours: ["Obsidian", "Indigo", "Porcelain"],
     tags: ["new_arrival"],
@@ -172,7 +163,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "A slim, camera-first Tecno with fast charging and a curved AMOLED screen.",
     specs: { display: '6.78" AMOLED, 144Hz', chip: "MediaTek Helio G100 Ultimate", ram: "8GB", camera: "50MP main · 8MP ultra-wide", battery_mah: 5200, os: "Android 15 · HiOS 15", network: "4G · Dual SIM" },
-    images: [IMG.galaxy],
     storage: [["256GB", 395000]],
     colours: ["Black", "Green"],
     age: 25,
@@ -184,7 +174,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "Big screen, big battery and 90W charging at a price that makes sense.",
     specs: { display: '6.78" AMOLED, 144Hz', chip: "MediaTek Helio G100 Ultimate", ram: "8GB", camera: "50MP main · 8MP ultra-wide", battery_mah: 5200, os: "Android 15 · XOS 15", network: "4G · Dual SIM" },
-    images: [IMG.pixel],
     storage: [["256GB", 365000, 395000]],
     colours: ["Gray", "Black"],
     tags: ["deal"],
@@ -198,7 +187,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "A 200MP camera and an IP68 body for less than you'd expect.",
     specs: { display: '6.67" AMOLED, 120Hz', chip: "MediaTek Dimensity 7300 Ultra", ram: "8GB", camera: "200MP main · 8MP ultra-wide · 2MP macro", battery_mah: 5500, os: "Android 15 · HyperOS 2", network: dualNet },
-    images: [IMG.classic],
     storage: [["256GB", 410000], ["512GB", 470000]],
     colours: ["Black", "Blue"],
     age: 50,
@@ -211,7 +199,6 @@ const DEFS: Def[] = [
     condition: "uk_used",
     description: "UK-used, tested and graded in our Lagos workshop. Comes with a written condition report.",
     specs: { display: '6.9" OLED, 120Hz ProMotion', chip: "A18 Pro", ram: "8GB", camera: "48MP main · 48MP ultra-wide · 12MP 5× telephoto", battery_mah: 4685, os: "iOS 26", network: iosNet },
-    images: [IMG.proMax, IMG.proTitanium],
     storage: [["256GB", 1780000, 1890000], ["512GB", 2020000]],
     colours: ["Desert Titanium", "Natural Titanium", "Black Titanium"],
     used: { grade: "A+", battery: 98, warranty: 6, notes: "No marks at all. Original screen, battery and cameras." },
@@ -226,7 +213,6 @@ const DEFS: Def[] = [
     condition: "uk_used",
     description: "UK-used, tested and graded in our Lagos workshop. Comes with a written condition report.",
     specs: { display: '6.7" OLED, 120Hz ProMotion', chip: "A17 Pro", ram: "8GB", camera: "48MP main · 12MP ultra-wide · 12MP 5× telephoto", battery_mah: 4441, os: "iOS 26", network: iosNet },
-    images: [IMG.proTitanium, IMG.proMax, IMG.classic],
     storage: [["256GB", 1450000, 1570000], ["512GB", 1640000]],
     colours: ["Natural Titanium", "Blue", "Black Titanium"],
     used: { grade: "A", battery: 92, warranty: 3, notes: "Faint mark on the frame, only visible up close. Original screen and battery." },
@@ -241,7 +227,6 @@ const DEFS: Def[] = [
     condition: "uk_used",
     description: "UK-used, tested and graded in our Lagos workshop. Comes with a written condition report.",
     specs: { display: '6.1" OLED, 60Hz', chip: "A16 Bionic", ram: "6GB", camera: "48MP main · 12MP ultra-wide", battery_mah: 3349, os: "iOS 26", network: iosNet },
-    images: [IMG.classic, IMG.proTitanium],
     storage: [["128GB", 820000], ["256GB", 930000]],
     colours: ["Pink", "Blue", "Black"],
     used: { grade: "A", battery: 90, warranty: 3, notes: "Clean screen and back. All functions tested." },
@@ -255,7 +240,6 @@ const DEFS: Def[] = [
     condition: "uk_used",
     description: "UK-used, tested and graded in our Lagos workshop. Comes with a written condition report.",
     specs: { display: '6.1" OLED, 120Hz ProMotion', chip: "A16 Bionic", ram: "6GB", camera: "48MP main · 12MP ultra-wide · 12MP 3× telephoto", battery_mah: 3200, os: "iOS 26", network: iosNet },
-    images: [IMG.proTitanium, IMG.classic],
     storage: [["128GB", 760000], ["256GB", 850000]],
     colours: ["Deep Purple", "Space Black", "Gold"],
     used: { grade: "B", battery: 86, warranty: 3, notes: "Light scuffs on the frame, hidden by a case. Screen has no scratches." },
@@ -268,7 +252,6 @@ const DEFS: Def[] = [
     condition: "uk_used",
     description: "UK-used, tested and graded in our Lagos workshop. Comes with a written condition report.",
     specs: { display: '6.1" OLED, 60Hz', chip: "A15 Bionic", ram: "4GB", camera: "12MP main · 12MP ultra-wide", battery_mah: 3240, os: "iOS 26", network: iosNet },
-    images: [IMG.classic],
     storage: [["128GB", 420000, 465000], ["256GB", 485000]],
     colours: ["Midnight", "Starlight", "Blue", "Pink"],
     used: { grade: "B", battery: 84, warranty: 3, notes: "Light marks on the back glass. Original screen, battery replaced by us with a genuine part." },
@@ -283,7 +266,6 @@ const DEFS: Def[] = [
     condition: "uk_used",
     description: "UK-used, tested and graded in our Lagos workshop. Comes with a written condition report.",
     specs: { display: '6.8" AMOLED, 120Hz', chip: "Snapdragon 8 Gen 3 for Galaxy", ram: "12GB", camera: "200MP main · 50MP 5× · 10MP 3× · 12MP ultra-wide", battery_mah: 5000, os: "Android 16 · One UI 8", network: dualNet },
-    images: [IMG.galaxy, IMG.device],
     storage: [["256GB", 1150000], ["512GB", 1290000]],
     colours: ["Titanium Gray", "Titanium Black", "Violet"],
     used: { grade: "A", battery: 91, warranty: 3, notes: "S Pen included. No screen burn-in. Faint mark on one corner." },
@@ -297,7 +279,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "Active noise cancellation, heart-rate sensing and a USB-C MagSafe case.",
     specs: { connectivity: "Bluetooth 5.3 · H2 chip", battery_life: "Up to 8 hours (ANC on)" },
-    images: [IMG.accessory],
     storage: [[null, 420000, 455000]],
     colours: [null],
     tags: ["deal", "best_seller"],
@@ -311,7 +292,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "Original Apple 20W adapter. Fast-charges any iPhone from 8 onwards.",
     specs: { output: "20W USB-C PD", compatibility: "iPhone 8 and later, iPad" },
-    images: [IMG.accessory],
     storage: [[null, 18000]],
     colours: ["White"],
     stock: 40,
@@ -324,7 +304,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "Charge a phone and a watch, or two phones, from one compact plug.",
     specs: { output: "35W shared across two USB-C ports", compatibility: "iPhone, iPad, AirPods, Apple Watch" },
-    images: [IMG.accessory],
     storage: [[null, 42000]],
     colours: ["White"],
     stock: 18,
@@ -337,7 +316,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "Snaps onto the back of any MagSafe iPhone. Slim enough to leave on all day.",
     specs: { capacity: "5,000 mAh", output: "15W wireless · 20W USB-C", compatibility: "iPhone 12 and later" },
-    images: [IMG.accessory],
     storage: [[null, 38000]],
     colours: ["Black", "White"],
     stock: 15,
@@ -350,7 +328,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "Two to four full phone charges. Essential for NEPA days.",
     specs: { capacity: "20,000 mAh", output: "22.5W USB-C PD · 2× USB-A" },
-    images: [IMG.accessory],
     storage: [[null, 29000]],
     colours: ["Black"],
     stock: 30,
@@ -363,7 +340,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "Crystal-clear case that won't yellow, with a built-in MagSafe ring.",
     specs: { compatibility: "iPhone 15, 16 and 17 series (choose at checkout)" },
-    images: [IMG.accessory],
     storage: [[null, 15000]],
     colours: ["Clear"],
     stock: 50,
@@ -376,7 +352,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "9H glass with an easy-fit frame. We fit it free in store.",
     specs: { compatibility: "Most iPhone and Galaxy models" },
-    images: [IMG.accessory],
     storage: [[null, 7500]],
     colours: [null],
     stock: 80,
@@ -390,7 +365,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "Sleep score, blood-pressure alerts and all-day battery. 45mm GPS model.",
     specs: { display: "45mm Always-On Retina", battery_life: "Up to 24 hours", compatibility: "iPhone 11 and later" },
-    images: [IMG.device],
     storage: [[null, 620000]],
     colours: ["Black", "Silver"],
     stock: 6,
@@ -404,7 +378,6 @@ const DEFS: Def[] = [
     condition: "new",
     description: "Waterproof, drop-proof Bluetooth speaker with 14 hours of playtime.",
     specs: { connectivity: "Bluetooth 5.4 · USB-C audio", battery_life: "Up to 14 hours" },
-    images: [IMG.device],
     storage: [[null, 165000, 185000]],
     colours: ["Black", "Blue"],
     stock: 9,
@@ -448,7 +421,7 @@ function build(def: Def, i: number): Product {
     condition: def.condition,
     description: def.description,
     specs: def.specs,
-    images: def.images,
+    images: localImages(def.condition === "uk_used" ? `${slugBase}-uk-used` : slugBase, def.category),
     tags: def.tags ?? [],
     deal_ends_at: def.dealHours ? hoursAhead(def.dealHours) : null,
     is_active: true,

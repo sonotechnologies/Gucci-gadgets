@@ -34,7 +34,7 @@ export const productSchema = z
     condition: z.enum(["new", "uk_used"]),
     description: z.string().trim().max(2000),
     specs: z.record(z.string(), z.union([z.string(), z.number()])),
-    images: z.array(z.string().url()).max(12),
+    images: z.array(z.union([z.string().url(), z.string().regex(/^\/[\w./-]+$/, "Image path must start with /")])).max(12),
     tags: z.array(z.enum(TAGS as [string, ...string[]])),
     deal_ends_at: z.preprocess((v) => (v === "" ? null : v), z.string().datetime({ offset: true }).nullable()),
     is_active: z.boolean(),

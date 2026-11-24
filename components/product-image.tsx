@@ -1,11 +1,13 @@
+"use client";
 import { Headphones, Smartphone, Watch } from "lucide-react";
 import Image from "next/image";
+import { useState } from "react";
 import { cn } from "@/lib/cn";
 import type { Category } from "@/lib/types";
 
 /**
  * Product photo on a soft `surface` tile. Falls back to a labelled striped
- * placeholder when a product has no photo yet (easy to spot and replace).
+ * placeholder when a product has no photo yet, or the photo fails to load.
  */
 export function ProductImage({
   src,
@@ -24,10 +26,16 @@ export function ProductImage({
   className?: string;
   imgClassName?: string;
 }) {
+  const [failed, setFailed] = useState<string | null>(null);
+  const show = src && failed !== src;
+  // Callers that stretch the tile over a card pass `absolute inset-0`; adding
+  // `relative` too would override it (Tailwind orders .relative after .absolute)
+  // and collapse the tile to zero height.
+  const positioned = /\b(absolute|fixed)\b/.test(className ?? "");
   return (
-    <div className={cn("relative overflow-hidden bg-surface", className)}>
-      {src ? (
-        <Image src={src} alt={alt} fill sizes={sizes} priority={priority} className={cn("object-cover", imgClassName)} />
+    <div className={cn(!positioned && "relative", "overflow-hidden bg-surface", className)}>
+      {show ? (
+        <Image src={src} alt={alt} fill sizes={sizes} priority={priority} onError={() => setFailed(src)} className={cn(!/object-contain/.test(imgClassName ?? "") && "object-cover", imgClassName)} />
       ) : (
         <div
           className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted"

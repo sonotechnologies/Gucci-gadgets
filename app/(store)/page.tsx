@@ -7,7 +7,6 @@ import { Countdown, GradeBadge } from "@/components/ui";
 import { baseVariant, batteryTone, isDealActive, isNewArrival, isPhone } from "@/lib/catalog";
 import { getProducts, getReviews, getSettings, getSwapValues } from "@/lib/data";
 import { formatNaira } from "@/lib/format";
-import { IMG } from "@/lib/seed";
 import { BRANDS } from "@/lib/types";
 import { displayPhone, waLink } from "@/lib/whatsapp";
 
@@ -43,10 +42,10 @@ export default async function HomePage() {
   const fv = featured ? baseVariant(featured) : undefined;
 
   const catTiles = [
-    { href: "/shop/phones", label: "New phones", img: products.find((p) => p.condition === "new" && isPhone(p))?.images[0] ?? IMG.proMax },
-    { href: "/shop/uk-used", label: "UK-used", img: products.find((p) => p.condition === "uk_used")?.images[0] ?? IMG.classic },
-    { href: "/shop/accessories", label: "Accessories", img: products.find((p) => p.category === "accessory")?.images[0] ?? IMG.accessory },
-    { href: "/shop/gadgets", label: "Gadgets", img: products.find((p) => p.category === "gadget")?.images[0] ?? IMG.device },
+    { href: "/shop/phones", label: "New phones", img: products.find((p) => p.condition === "new" && isPhone(p))?.images[0] ?? null },
+    { href: "/shop/uk-used", label: "UK-used", img: products.find((p) => p.condition === "uk_used")?.images[0] ?? null },
+    { href: "/shop/accessories", label: "Accessories", img: products.find((p) => p.category === "accessory")?.images[0] ?? null },
+    { href: "/shop/gadgets", label: "Gadgets", img: products.find((p) => p.category === "gadget")?.images[0] ?? null },
   ];
 
   return (
@@ -71,7 +70,7 @@ export default async function HomePage() {
           </div>
           {featured && fv && (
             <Link href={`/product/${featured.slug}`} className="relative block min-h-[420px] hover:no-underline">
-              <ProductImage src={featured.images[0]} alt={featured.name} priority sizes="(min-width: 768px) 640px, 100vw" className="absolute inset-0" />
+              <ProductImage src={featured.images[0]} alt={featured.name} priority sizes="(min-width: 768px) 640px, 100vw" className="absolute inset-0" imgClassName="object-contain object-left-top p-4 md:object-center md:p-6" />
               <div className="absolute bottom-4 right-4 flex w-[min(280px,calc(100%-32px))] flex-col gap-3 rounded-card border border-border bg-bg p-4 text-text md:bottom-5 md:right-5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-small font-medium">

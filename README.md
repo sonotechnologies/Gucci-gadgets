@@ -51,7 +51,12 @@ Cart, compare, the swap estimator, repairs and WhatsApp ordering all work fully 
 | Reviews | the `reviews` table (placeholder) |
 | Map | the "map embed" placeholders on Home and About |
 
-The **prices are rough demo values**. Check current Lagos market prices before pitching. Product photos are generic Unsplash shots, and products with no photo show a labelled "product shot" placeholder.
+The **prices are rough demo values**. Check current Lagos market prices before pitching.
+
+**Product images** are clean, logo-free renders stored in `public/products/` (3 per phone, 1 per accessory or gadget), so they always load and never depend on another site. Replace them with real photos from Admin → Products (uploads go to Supabase Storage). If any photo fails to load, the tile shows a labelled "product shot" placeholder instead of an empty box.
+
+- Regenerate the renders: `npm run images:generate` (needs Python 3 with Pillow).
+- A database seeded before the renders existed still points at old placeholder links. Run `supabase/update-images.sql` in the Supabase SQL editor; it only changes the `images` column, so your price and stock edits are kept.
 
 All WhatsApp links read the number from settings (default `2349130928293`, Sono's demo number).
 
