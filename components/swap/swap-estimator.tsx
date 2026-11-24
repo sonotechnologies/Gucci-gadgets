@@ -608,8 +608,8 @@ export function SwapEstimator({
             </div>
           )}
 
-          {/* Desktop nav */}
-          <div className="hidden justify-between gap-3 pt-2 lg:flex">
+          {/* Desktop nav (the result step has its own actions; the stepper handles going back) */}
+          <div className={cn("hidden justify-between gap-3 pt-2", step < 3 && "lg:flex")}>
             {step > 0 ? (
               <button type="button" onClick={() => go(step - 1)} className="btn btn-secondary btn-lg">
                 Back
