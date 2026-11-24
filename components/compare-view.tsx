@@ -92,6 +92,17 @@ export function CompareView({ phones, suggestions }: { phones: Product[]; sugges
   const scroller = useRef<HTMLDivElement>(null);
   const miniHeader = useRef<HTMLDivElement>(null);
   const loadedFromUrl = useRef(false);
+  const headerRow = useRef<HTMLDivElement>(null);
+  const [isNarrow, setIsNarrow] = useState(false);
+  const [headerGone, setHeaderGone] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const on = () => setIsNarrow(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
 
   // Load a shared comparison (?p=slug,slug) once, then keep the URL in sync.
   useEffect(() => {
@@ -184,6 +195,14 @@ export function CompareView({ phones, suggestions }: { phones: Product[]; sugges
     ];
   }, [selected]);
 
+  useEffect(() => {
+    const el = headerRow.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setHeaderGone(!e.isIntersecting && e.boundingClientRect.top < 0), { rootMargin: "-56px 0px 0px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [selected.length]);
+
   const onScroll = () => {
     if (miniHeader.current && scroller.current) miniHeader.current.scrollLeft = scroller.current.scrollLeft;
   };
@@ -257,7 +276,7 @@ export function CompareView({ phones, suggestions }: { phones: Product[]; sugges
   }
 
   const slots = selected.length < MAX_COMPARE ? selected.length + 1 : selected.length;
-  const cols = `minmax(96px,150px) repeat(${slots}, minmax(160px, 1fr))`;
+  const cols = isNarrow ? `84px repeat(${slots}, minmax(136px, 1fr))` : `minmax(110px,150px) repeat(${slots}, minmax(160px, 1fr))`;
   const differs = (keys: string[]) => keys.length > 1 && new Set(keys).size > 1;
 
   return (
@@ -285,8 +304,8 @@ export function CompareView({ phones, suggestions }: { phones: Product[]; sugges
       </div>
 
       {/* Mobile: compact names pinned under the site header, scrolled in sync with the table */}
-      <div className="sticky top-14 z-[6] -mx-4 border-b border-border bg-bg md:hidden" aria-hidden>
-        <div ref={miniHeader} className="overflow-hidden px-4">
+      <div className={cn("sticky top-14 z-[6] -mx-4 border-b border-border bg-bg transition-opacity duration-150 md:hidden", headerGone ? "opacity-100" : "pointer-events-none h-0 overflow-hidden border-0 opacity-0")} aria-hidden>
+        <div ref={miniHeader} className="overflow-hidden px-4" onTransitionEnd={onScroll}>
           <div className="grid min-w-max" style={{ gridTemplateColumns: cols }}>
             <div className="sticky left-0 bg-bg" />
             {selected.map((p) => (
@@ -301,14 +320,14 @@ export function CompareView({ phones, suggestions }: { phones: Product[]; sugges
 
       <div ref={scroller} onScroll={onScroll} className="-mx-4 overflow-x-auto md:mx-0 md:overflow-visible">
         <div className="min-w-max px-4 md:min-w-0 md:px-0" role="table" aria-label="Phone comparison">
-          <div role="row" className="z-[5] grid border-b border-border bg-bg md:sticky md:top-14" style={{ gridTemplateColumns: cols }}>
+          <div ref={headerRow} role="row" className="z-[5] grid border-b border-border bg-bg md:sticky md:top-14" style={{ gridTemplateColumns: cols }}>
             <div role="columnheader" className="sticky left-0 z-[1] bg-bg" />
             {selected.map((p) => {
               const v = baseVariant(p);
               const inStock = !!v && v.in_stock && v.stock_qty > 0;
               return (
                 <div role="columnheader" key={p.id} className="flex min-w-0 flex-col gap-2 p-3 text-left font-normal">
-                  <div className="relative max-w-[170px]">
+                  <div className="relative max-w-[120px] md:max-w-[170px]">
                     <Link href={`/product/${p.slug}`} aria-label={p.name}>
                       <ProductImage src={p.images[0]} alt={p.name} sizes="170px" className="aspect-square rounded-btn" />
                     </Link>
@@ -356,7 +375,7 @@ export function CompareView({ phones, suggestions }: { phones: Product[]; sugges
                 <button
                   type="button"
                   onClick={() => setPicker(true)}
-                  className="flex aspect-square w-full max-w-[170px] flex-col items-center justify-center gap-2 rounded-btn border-2 border-dashed border-border text-small font-medium text-muted hover:border-accent hover:text-accent"
+                  className="flex aspect-square w-full max-w-[120px] flex-col md:max-w-[170px] items-center justify-center gap-2 rounded-btn border-2 border-dashed border-border text-small font-medium text-muted hover:border-accent hover:text-accent"
                 >
                   <Plus size={24} strokeWidth={1.5} />
                   Add a phone

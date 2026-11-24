@@ -119,6 +119,8 @@ export function SwapEstimator({
   const [restored, setRestored] = useState(false);
   const topRef = useRef<HTMLDivElement>(null);
   const qRefs = useRef<Record<string, HTMLFieldSetElement | null>>({});
+  const storageRef = useRef<HTMLDivElement>(null);
+  const smooth = (): ScrollBehavior => (window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
 
   // Restore progress from this browser session (unless the URL asked for something specific).
   useEffect(() => {
@@ -361,6 +363,7 @@ export function SwapEstimator({
                           onClick={() => {
                             setModel(m);
                             setStorage(storagesFor(m)[0] ?? null);
+                            setTimeout(() => storageRef.current?.scrollIntoView({ behavior: smooth(), block: "center" }), 80);
                           }}
                           layout="column"
                           className="min-h-[76px] gap-1"
@@ -373,7 +376,7 @@ export function SwapEstimator({
                     {models.length === 0 && <p className="text-small text-muted">No {brand} models match &ldquo;{modelQ}&rdquo;.</p>}
                   </fieldset>
                   {model && (
-                    <div className="flex max-w-md animate-rise flex-col gap-3">
+                    <div ref={storageRef} className="flex max-w-md scroll-mt-28 animate-rise flex-col gap-3">
                       <span className="text-h3 font-semibold">Storage</span>
                       <Segmented label="Storage" mono value={storage ?? ""} onChange={setStorage} options={storagesFor(model).map((s) => ({ value: s, label: s }))} />
                     </div>
@@ -496,6 +499,30 @@ export function SwapEstimator({
                 <span className="h-px flex-1 bg-border" />
               </div>
 
+              {targetProduct && target?.kind === "product" && (
+                <div className="flex animate-rise flex-col gap-3 rounded-card border-2 border-accent bg-accent-soft p-4 sm:flex-row sm:items-center">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <ProductImage src={targetProduct.images[0]} alt="" sizes="64px" className="h-16 w-16 shrink-0 rounded-lg" />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="text-micro text-muted">You want</span>
+                      <span className="text-[15px] font-semibold">{targetProduct.name}</span>
+                      <span className="num text-small">{tv ? formatNaira(tv.price) : "—"}</span>
+                    </span>
+                  </div>
+                  {productStorages(targetProduct).length > 1 && (
+                    <div className="sm:w-64">
+                      <Segmented
+                        label="Storage of the phone you want"
+                        mono
+                        value={target.storage ?? ""}
+                        onChange={(st) => setTarget({ kind: "product", slug: targetProduct.slug, storage: st })}
+                        options={productStorages(targetProduct).map((st) => ({ value: st, label: st }))}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
               <label className="relative max-w-md">
                 <span className="sr-only">Search phones</span>
                 <Search size={18} strokeWidth={1.5} className="pointer-events-none absolute left-3 top-3 text-muted" />
@@ -525,18 +552,6 @@ export function SwapEstimator({
                 })}
                 {filteredPhones.length === 0 && <p className="text-small text-muted">No phones match that search. Choose &ldquo;isn&rsquo;t listed&rdquo; above and type it in.</p>}
               </div>
-              {targetProduct && productStorages(targetProduct).length > 1 && target?.kind === "product" && (
-                <div className="flex max-w-md animate-rise flex-col gap-2">
-                  <span className="text-small font-medium">{targetProduct.name} storage</span>
-                  <Segmented
-                    label="Storage of the phone you want"
-                    mono
-                    value={target.storage ?? ""}
-                    onChange={(s) => setTarget({ kind: "product", slug: targetProduct.slug, storage: s })}
-                    options={productStorages(targetProduct).map((s) => ({ value: s, label: s }))}
-                  />
-                </div>
-              )}
             </div>
           )}
 
@@ -550,6 +565,9 @@ export function SwapEstimator({
                   <span className="text-[13px] text-muted">{phoneLabel}</span>
                 </div>
                 <div className="flex flex-col gap-1.5 rounded-card border border-border p-5">
+                  {targetProduct && target?.kind === "product" && (
+                    <ProductImage src={targetProduct.images[0]} alt={targetProduct.name} sizes="96px" className="mb-2 h-20 w-20 rounded-btn" />
+                  )}
                   <span className="text-small text-muted">{target?.kind === "cash" ? "You get" : "Phone you want"}</span>
                   <span className="num text-h2 font-medium">{target?.kind === "cash" ? "Cash" : tv ? formatNaira(tv.price) : "Price TBC"}</span>
                   <span className="text-[13px] text-muted">
@@ -568,6 +586,14 @@ export function SwapEstimator({
                   {pay != null ? "Based on the middle of your estimate range." : "Send your answers and we'll reply with an exact figure, usually within the hour."}
                 </span>
               </div>
+              <ol className="grid gap-2 rounded-card border border-border p-5 text-small sm:grid-cols-3">
+                {["Send your request on WhatsApp", "We confirm the price and a time", target?.kind === "cash" ? "Inspect, then get paid by transfer" : "Inspect, swap and move your data"].map((t, i) => (
+                  <li key={t} className="flex items-center gap-2.5">
+                    <span className="num flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface text-micro font-medium">{i + 1}</span>
+                    {t}
+                  </li>
+                ))}
+              </ol>
               <p className="text-[13px] leading-normal text-muted">
                 Final value is confirmed after physical inspection. Bring the phone to the store or we can inspect it on pickup. Estimates are valid for 7 days.
               </p>

@@ -15,6 +15,8 @@ export function CompareTray() {
   const show = hydrated && items.length > 0 && pathname !== "/compare";
 
   return (
+    <>
+    {show && <div aria-hidden className={cn("h-24", pathname.startsWith("/product/") && "max-md:h-0")} />}
     <div
       aria-hidden={!show}
       inert={!show}
@@ -43,5 +45,6 @@ export function CompareTray() {
         Compare
       </Link>
     </div>
+    </>
   );
 }

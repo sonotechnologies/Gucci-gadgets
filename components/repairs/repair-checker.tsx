@@ -16,7 +16,7 @@ import {
   Smartphone,
   Wrench,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/format";
@@ -65,6 +65,8 @@ export function RepairChecker({ prices }: { prices: RepairPrice[] }) {
   const [listBrand, setListBrand] = useState<string>("All");
   const [q, setQ] = useState("");
   const quoteRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [formVisible, setFormVisible] = useState(false);
   const topRef = useRef<HTMLDivElement>(null);
 
   const models = useMemo(() => {
@@ -79,6 +81,14 @@ export function RepairChecker({ prices }: { prices: RepairPrice[] }) {
   const longest = known.map((l) => l.price!.duration).sort((a, b) => DURATION_RANK(b) - DURATION_RANK(a))[0];
   const hasUnknown = lines.some((l) => !l.price);
   const ready = !!deviceName && deviceName.length > 1 && issues.length > 0;
+
+  useEffect(() => {
+    const el = formRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setFormVisible(e.isIntersecting), { threshold: 0.15 });
+    io.observe(el);
+    return () => io.disconnect();
+  });
 
   const toggleIssue = (i: RepairIssue) => setIssues((cur) => (cur.includes(i) ? cur.filter((x) => x !== i) : [...cur, i]));
 
@@ -289,11 +299,12 @@ export function RepairChecker({ prices }: { prices: RepairPrice[] }) {
             </div>
 
             <form
+              ref={formRef}
               onSubmit={(e) => {
                 e.preventDefault();
                 send();
               }}
-              className="flex flex-col gap-4 rounded-card border border-border p-6"
+              className="flex scroll-mt-20 flex-col gap-4 rounded-card border border-border p-6"
               noValidate
             >
               <h2 className="flex items-center gap-3 text-h3 font-semibold">
@@ -392,6 +403,35 @@ export function RepairChecker({ prices }: { prices: RepairPrice[] }) {
           </div>
         )}
       </div>
+
+      {ready && (
+        <div
+          className={cn(
+            "fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-t border-border bg-bg px-4 pb-[calc(12px+env(safe-area-inset-bottom))] pt-3 transition-transform duration-200 md:hidden",
+            formVisible ? "translate-y-full" : "translate-y-0",
+          )}
+          aria-hidden={formVisible}
+        >
+          <div className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-micro text-muted">
+              {deviceName} · {issues.length} repair{issues.length > 1 ? "s" : ""}
+            </span>
+            <span className="num text-[18px] font-medium text-accent">{known.length ? `from ${formatNaira(total)}` : "Free diagnosis"}</span>
+          </div>
+          <button
+            type="button"
+            tabIndex={formVisible ? -1 : 0}
+            onClick={() => {
+              formRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+              setTimeout(() => (formRef.current?.querySelector("input") as HTMLInputElement | null)?.focus({ preventScroll: true }), 400);
+            }}
+            className="btn btn-whatsapp btn-lg px-5"
+          >
+            <MessageCircle size={18} strokeWidth={1.5} />
+            Book
+          </button>
+        </div>
+      )}
 
       {/* ---------- Price list ---------- */}
       <section className="flex flex-col gap-4 pt-4" aria-labelledby="price-list">
