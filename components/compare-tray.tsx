@@ -12,7 +12,9 @@ export function CompareTray() {
   const remove = useCompare((s) => s.remove);
   const hydrated = useHydrated();
   const pathname = usePathname();
-  const show = hydrated && items.length > 0 && pathname !== "/compare";
+  // The tray is for shopping pages; flows with their own bottom bar don't show it.
+  const hidden = ["/compare", "/swap", "/repairs", "/cart"].includes(pathname);
+  const show = hydrated && items.length > 0 && !hidden;
 
   return (
     <>

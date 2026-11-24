@@ -225,7 +225,7 @@ export function SwapEstimator({
   }, [phoneLabel, mode, answers, est, target, targetProduct, tv, pay]);
 
   const payLabel = target?.kind === "cash" || (pay != null && pay < 0) ? "We pay you" : "You pay";
-  const payValue = pay != null ? formatNaira(round1k(shownPay)) : est ? "Quote on WhatsApp" : "—";
+  const payValue = pay != null ? formatNaira(round1k(shownPay)) : target?.kind === "custom" || (target && !est) ? "Quote on WhatsApp" : "—";
   const estValue = est ? formatNaira(round1k(shownEst)) : mode === "custom" && customOk ? "On inspection" : "—";
 
   // ---------- pieces ----------

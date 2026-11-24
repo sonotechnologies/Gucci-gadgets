@@ -276,7 +276,9 @@ export function CompareView({ phones, suggestions }: { phones: Product[]; sugges
   }
 
   const slots = selected.length < MAX_COMPARE ? selected.length + 1 : selected.length;
-  const cols = isNarrow ? `84px repeat(${slots}, minmax(136px, 1fr))` : `minmax(110px,150px) repeat(${slots}, minmax(160px, 1fr))`;
+  // Mobile: fixed column widths so two phones fit side by side (long spec text wraps instead of widening columns).
+  const cols = isNarrow ? `84px repeat(${slots}, 140px)` : `minmax(110px,150px) repeat(${slots}, minmax(160px, 1fr))`;
+  const tableWidth = isNarrow ? 84 + slots * 140 : undefined;
   const differs = (keys: string[]) => keys.length > 1 && new Set(keys).size > 1;
 
   return (
@@ -306,7 +308,7 @@ export function CompareView({ phones, suggestions }: { phones: Product[]; sugges
       {/* Mobile: compact names pinned under the site header, scrolled in sync with the table */}
       <div className={cn("sticky top-14 z-[6] -mx-4 border-b border-border bg-bg transition-opacity duration-150 md:hidden", headerGone ? "opacity-100" : "pointer-events-none h-0 overflow-hidden border-0 opacity-0")} aria-hidden>
         <div ref={miniHeader} className="overflow-hidden px-4" onTransitionEnd={onScroll}>
-          <div className="grid min-w-max" style={{ gridTemplateColumns: cols }}>
+          <div className="grid" style={{ gridTemplateColumns: cols, width: tableWidth }}>
             <div className="sticky left-0 bg-bg" />
             {selected.map((p) => (
               <div key={p.id} className="flex items-center gap-2 px-3 py-2">
@@ -319,7 +321,7 @@ export function CompareView({ phones, suggestions }: { phones: Product[]; sugges
       </div>
 
       <div ref={scroller} onScroll={onScroll} className="-mx-4 overflow-x-auto md:mx-0 md:overflow-visible">
-        <div className="min-w-max px-4 md:min-w-0 md:px-0" role="table" aria-label="Phone comparison">
+        <div className="px-4 md:px-0" style={{ width: tableWidth ? tableWidth + 32 : undefined }} role="table" aria-label="Phone comparison">
           <div ref={headerRow} role="row" className="z-[5] grid border-b border-border bg-bg md:sticky md:top-14" style={{ gridTemplateColumns: cols }}>
             <div role="columnheader" className="sticky left-0 z-[1] bg-bg" />
             {selected.map((p) => {
@@ -400,7 +402,7 @@ export function CompareView({ phones, suggestions }: { phones: Product[]; sugges
                         {r.label}
                       </div>
                       {r.values.map((val, i) => (
-                        <div role="cell" key={i} className="px-3 py-3.5 text-small leading-[1.45]">
+                        <div role="cell" key={i} className="min-w-0 break-words px-3 py-3.5 text-small leading-[1.45]">
                           {val}
                         </div>
                       ))}

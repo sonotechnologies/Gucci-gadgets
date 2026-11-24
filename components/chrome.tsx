@@ -26,7 +26,7 @@ export function WhatsAppFab() {
   const settings = useSettings();
   const pathname = usePathname();
   const hydrated = useHydrated();
-  const trayUp = useCompare((s) => s.items.length > 0) && hydrated && pathname !== "/compare";
+  const trayUp = useCompare((s) => s.items.length > 0) && hydrated && !["/compare", "/swap", "/repairs", "/cart"].includes(pathname);
   // Pages with their own WhatsApp action on mobile: hide the floating button there.
   const ownCta = pathname.startsWith("/product/") || pathname === "/swap" || pathname === "/repairs" || pathname === "/cart";
   const hasBottomBar = false;
