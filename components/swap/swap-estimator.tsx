@@ -1,17 +1,41 @@
 "use client";
-import { Battery, Box, Fingerprint, MessageCircle, Search, Smartphone, Wrench, CircleCheck, Circle } from "lucide-react";
+import {
+  Banknote,
+  Battery,
+  Box,
+  Check,
+  ChevronLeft,
+  Circle,
+  CircleCheck,
+  Fingerprint,
+  MessageCircle,
+  PenLine,
+  RotateCcw,
+  Search,
+  Smartphone,
+  Wrench,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { baseVariant, conditionLabel } from "@/lib/catalog";
+import { baseVariant, conditionLabel, storages as productStorages, findVariant } from "@/lib/catalog";
 import { cn } from "@/lib/cn";
 import { formatNaira, storageRank } from "@/lib/format";
-import { answerLabel, estimateSwap, SWAP_QUESTIONS, topUp, type SwapAnswers, type SwapQuestion } from "@/lib/swap";
+import {
+  answerLabel,
+  estimateBreakdown,
+  estimateSwap,
+  SWAP_QUESTIONS,
+  SWAP_STORAGE_OPTIONS,
+  topUp,
+  type SwapAnswers,
+  type SwapQuestion,
+} from "@/lib/swap";
 import type { Product, SwapValue } from "@/lib/types";
 import { waLink } from "@/lib/whatsapp";
 import { ProductImage } from "../product-image";
 import { useSettings } from "../providers";
 import { OptionCard, Segmented } from "../ui";
 
-const STEPS = ["Your phone", "Condition", "Phone you want", "Result"] as const;
+const STEPS = ["Your phone", "Condition", "What you want", "Your offer"] as const;
 const Q_ICONS: Record<SwapQuestion["icon"], typeof Smartphone> = {
   screen: Smartphone,
   body: Box,
@@ -19,6 +43,20 @@ const Q_ICONS: Record<SwapQuestion["icon"], typeof Smartphone> = {
   biometrics: Fingerprint,
   repaired: Wrench,
 };
+const SAVE_KEY = "gg-swap-v2";
+
+type Target = { kind: "product"; slug: string; storage: string | null } | { kind: "custom"; name: string } | { kind: "cash" } | null;
+
+interface Saved {
+  mode: "list" | "custom";
+  brand: string;
+  model: string | null;
+  storage: string | null;
+  custom: { brand: string; model: string; storage: string };
+  answers: SwapAnswers;
+  target: Target;
+  step: number;
+}
 
 /** Animated number that counts toward its target (respects reduced motion). */
 function useCountUp(target: number, duration = 450): number {
@@ -36,8 +74,7 @@ function useCountUp(target: number, duration = 450): number {
     let raf = 0;
     const tick = (t: number) => {
       const k = Math.min(1, (t - start) / duration);
-      const e = 1 - Math.pow(1 - k, 3);
-      const v = a + (target - a) * e;
+      const v = a + (target - a) * (1 - Math.pow(1 - k, 3));
       setShown(v);
       from.current = v;
       if (k < 1) raf = requestAnimationFrame(tick);
@@ -47,6 +84,8 @@ function useCountUp(target: number, duration = 450): number {
   }, [target, duration]);
   return shown;
 }
+
+const round1k = (n: number) => Math.round(n / 1000) * 1000;
 
 export function SwapEstimator({
   values,
@@ -59,112 +98,208 @@ export function SwapEstimator({
 }) {
   const settings = useSettings();
   const brands = useMemo(() => [...new Set(values.map((v) => v.brand))], [values]);
-  const initModel = values.find((v) => v.model === initial.model);
-  const [brand, setBrand] = useState(initModel?.brand ?? (initial.brand && brands.includes(initial.brand) ? initial.brand : brands[0]));
-  const [model, setModel] = useState<string | null>(initModel?.model ?? null);
   const storagesFor = (m: string | null) =>
     values
       .filter((v) => v.model === m)
       .map((v) => v.storage)
       .sort((a, b) => storageRank(a) - storageRank(b));
+
+  const initModel = values.find((v) => v.model === initial.model);
+  const initTarget = phones.find((p) => p.slug === initial.target);
+  const [mode, setMode] = useState<"list" | "custom">("list");
+  const [brand, setBrand] = useState(initModel?.brand ?? (initial.brand && brands.includes(initial.brand) ? initial.brand : brands[0]));
+  const [model, setModel] = useState<string | null>(initModel?.model ?? null);
   const [storage, setStorage] = useState<string | null>(initModel ? storagesFor(initModel.model)[0] : null);
+  const [custom, setCustom] = useState({ brand: "", model: "", storage: "128GB" });
   const [answers, setAnswers] = useState<SwapAnswers>({});
-  const [targetSlug, setTargetSlug] = useState<string | null>(phones.some((p) => p.slug === initial.target) ? initial.target! : null);
-  const [q, setQ] = useState("");
+  const [target, setTarget] = useState<Target>(initTarget ? { kind: "product", slug: initTarget.slug, storage: baseVariant(initTarget)?.storage ?? null } : null);
   const [step, setStep] = useState(initModel ? 1 : 0);
+  const [modelQ, setModelQ] = useState("");
+  const [phoneQ, setPhoneQ] = useState("");
+  const [restored, setRestored] = useState(false);
   const topRef = useRef<HTMLDivElement>(null);
+  const qRefs = useRef<Record<string, HTMLFieldSetElement | null>>({});
+
+  // Restore progress from this browser session (unless the URL asked for something specific).
+  useEffect(() => {
+    if (initial.model || initial.target) return setRestored(true);
+    try {
+      const s = JSON.parse(sessionStorage.getItem(SAVE_KEY) ?? "null") as Saved | null;
+      if (s) {
+        setMode(s.mode);
+        setBrand(s.brand);
+        setModel(s.model);
+        setStorage(s.storage);
+        setCustom(s.custom);
+        setAnswers(s.answers);
+        setTarget(s.target);
+        setStep(s.step);
+      }
+    } catch {}
+    setRestored(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!restored) return;
+    try {
+      sessionStorage.setItem(SAVE_KEY, JSON.stringify({ mode, brand, model, storage, custom, answers, target, step } satisfies Saved));
+    } catch {}
+  }, [restored, mode, brand, model, storage, custom, answers, target, step]);
 
   const models = useMemo(() => {
     const m = new Map<string, number>();
     values.filter((v) => v.brand === brand).forEach((v) => m.set(v.model, Math.max(m.get(v.model) ?? 0, v.base_value)));
-    return [...m.entries()];
-  }, [values, brand]);
+    const t = modelQ.trim().toLowerCase();
+    return [...m.entries()].filter(([name]) => !t || name.toLowerCase().includes(t));
+  }, [values, brand, modelQ]);
 
-  const sv = values.find((v) => v.model === model && v.storage === storage);
+  // ---------- derived ----------
+  const sv = mode === "list" ? values.find((v) => v.model === model && v.storage === storage) : undefined;
+  const customOk = mode === "custom" && custom.brand.trim().length > 1 && custom.model.trim().length > 1;
+  const phoneLabel = mode === "custom" ? [custom.brand.trim(), custom.model.trim(), custom.storage].filter(Boolean).join(" ") : sv ? `${sv.model} · ${sv.storage}` : null;
   const est = sv ? estimateSwap(sv.base_value, answers) : null;
-  const target = phones.find((p) => p.slug === targetSlug) ?? null;
-  const tv = target ? baseVariant(target) : undefined;
-  const pay = est && tv ? topUp(tv.price, est.estimate) : null;
+  const breakdown = sv ? estimateBreakdown(sv.base_value, answers) : [];
   const answered = SWAP_QUESTIONS.filter((x) => answers[x.key]).length;
+  const allAnswered = answered === SWAP_QUESTIONS.length;
+
+  const targetProduct = target?.kind === "product" ? (phones.find((p) => p.slug === target.slug) ?? null) : null;
+  const tv = targetProduct ? findVariant(targetProduct, target?.kind === "product" ? target.storage : null, null) : undefined;
+  const targetPrice = target?.kind === "cash" ? 0 : (tv?.price ?? null);
+  const pay = est && targetPrice != null ? topUp(targetPrice, est.estimate) : null;
 
   const shownEst = useCountUp(est?.estimate ?? 0);
-  const shownPay = useCountUp(pay ?? 0);
+  const shownPay = useCountUp(Math.abs(pay ?? 0));
 
-  const canNext = [!!sv, answered === SWAP_QUESTIONS.length, !!target, false][step];
+  const stepValid = [mode === "list" ? !!sv : customOk, allAnswered, target?.kind === "custom" ? target.name.trim().length > 1 : !!target, true];
+  const canReach = (i: number) => stepValid.slice(0, i).every(Boolean);
+
   const go = (s: number) => {
     setStep(s);
-    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    topRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  };
+
+  const pick = (key: keyof SwapAnswers, value: string) => {
+    const next = { ...answers, [key]: value };
+    setAnswers(next);
+    // Guide the eye to the next unanswered question.
+    const nextQ = SWAP_QUESTIONS.find((q) => !next[q.key]);
+    if (nextQ) {
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      setTimeout(() => qRefs.current[nextQ.key]?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" }), 120);
+    }
+  };
+
+  const reset = () => {
+    setMode("list");
+    setModel(null);
+    setStorage(null);
+    setCustom({ brand: "", model: "", storage: "128GB" });
+    setAnswers({});
+    setTarget(null);
+    setStep(0);
+    try {
+      sessionStorage.removeItem(SAVE_KEY);
+    } catch {}
   };
 
   const filteredPhones = useMemo(() => {
-    const t = q.trim().toLowerCase();
+    const t = phoneQ.trim().toLowerCase();
     return phones.filter((p) => !t || `${p.name} ${p.brand} ${conditionLabel(p)}`.toLowerCase().includes(t));
-  }, [phones, q]);
+  }, [phones, phoneQ]);
 
+  // ---------- WhatsApp message ----------
   const message = useMemo(() => {
-    if (!sv || !est) return "";
-    const lines = [
-      "Hello Gucci Gadgets 👋",
-      "I'd like to swap my phone.",
-      `My phone: ${sv.model} ${sv.storage}`,
-      ...SWAP_QUESTIONS.map((x) => `${x.title.replace(/\?$/, "")}: ${answerLabel(x.key, answers[x.key])}`),
-      `Estimate: ${formatNaira(est.low)} – ${formatNaira(est.high)}`,
-    ];
-    if (target && tv) {
-      lines.push(`Phone I want: ${target.name} — ${[tv.storage, conditionLabel(target, tv)].filter(Boolean).join(", ")} (${formatNaira(tv.price)})`);
-      lines.push(pay! >= 0 ? `Top-up to pay: about ${formatNaira(pay!)}` : `You pay me: about ${formatNaira(-pay!)}`);
-    }
+    const lines = ["Hello Gucci Gadgets 👋", target?.kind === "cash" ? "I'd like to sell my phone." : "I'd like to swap my phone."];
+    lines.push(`My phone: ${phoneLabel ?? "…"}${mode === "custom" ? " (not on your list)" : ""}`);
+    SWAP_QUESTIONS.forEach((x) => lines.push(`${x.title.replace(/\?$/, "")}: ${answerLabel(x.key, answers[x.key])}`));
+    if (est) lines.push(`Online estimate: ${formatNaira(est.low)} – ${formatNaira(est.high)}`);
+    else lines.push("Online estimate: please quote me");
+    if (target?.kind === "product" && targetProduct && tv) {
+      lines.push(`Phone I want: ${targetProduct.name} — ${[tv.storage, conditionLabel(targetProduct, tv)].filter(Boolean).join(", ")} (${formatNaira(tv.price)})`);
+      if (pay != null) lines.push(pay >= 0 ? `Top-up to pay: about ${formatNaira(pay)}` : `You pay me: about ${formatNaira(-pay)}`);
+    } else if (target?.kind === "custom") lines.push(`Phone I want: ${target.name.trim()} (please confirm price)`);
     return lines.join("\n");
-  }, [sv, est, answers, target, tv, pay]);
+  }, [phoneLabel, mode, answers, est, target, targetProduct, tv, pay]);
 
-  const payLabel = pay != null && pay < 0 ? "We'll pay you the difference" : "You pay";
+  const payLabel = target?.kind === "cash" || (pay != null && pay < 0) ? "We pay you" : "You pay";
+  const payValue = pay != null ? formatNaira(round1k(shownPay)) : est ? "Quote on WhatsApp" : "—";
+  const estValue = est ? formatNaira(round1k(shownEst)) : mode === "custom" && customOk ? "On inspection" : "—";
 
+  // ---------- pieces ----------
   const estimateCard = (
     <div className="flex flex-col gap-4 rounded-card border border-border bg-bg p-6">
-      <span className="text-small text-muted">Estimate for</span>
       <div className="flex items-center gap-3">
-        <span className="flex h-11 w-11 items-center justify-center rounded-btn bg-surface text-muted">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-btn bg-surface text-muted">
           <Smartphone size={20} strokeWidth={1.5} />
         </span>
-        <span className="text-body font-medium">{sv ? `${sv.model} · ${sv.storage}` : "Choose your phone"}</span>
+        <div className="flex min-w-0 flex-col">
+          <span className="text-micro text-muted">Your phone</span>
+          <span className="truncate text-body font-medium">{phoneLabel ?? "Not chosen yet"}</span>
+        </div>
       </div>
       <div className="flex flex-col gap-1 border-y border-border py-4">
         <span className="text-small text-muted">Your phone is worth</span>
-        <span className="num text-[36px] font-medium leading-tight" aria-live="polite">
-          {est ? formatNaira(Math.round(shownEst / 1000) * 1000) : "—"}
+        <span className="num text-[34px] font-medium leading-tight" aria-live="polite">
+          {estValue}
         </span>
         <span className="text-[13px] text-muted">
-          {est ? `Range ${formatNaira(est.low)} – ${formatNaira(est.high)} · ${answered} of ${SWAP_QUESTIONS.length} answered` : "Pick a model and storage to start"}
+          {est
+            ? `Range ${formatNaira(est.low)} – ${formatNaira(est.high)}`
+            : mode === "custom"
+              ? "We'll price it on WhatsApp"
+              : "Pick your model to start"}
         </span>
+        {est && (
+          <div className="mt-2 flex items-center gap-2" aria-label={`${answered} of ${SWAP_QUESTIONS.length} condition questions answered`}>
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+              <div className="h-full rounded-full bg-accent transition-[width] duration-200" style={{ width: `${(answered / SWAP_QUESTIONS.length) * 100}%` }} />
+            </div>
+            <span className="num text-micro text-muted">
+              {answered}/{SWAP_QUESTIONS.length}
+            </span>
+          </div>
+        )}
       </div>
+      {breakdown.length > 1 && (
+        <dl className="flex flex-col gap-1.5 text-[13px]">
+          {breakdown.map((l) => (
+            <div key={l.label} className="flex justify-between gap-3">
+              <dt className="text-muted">{l.label}</dt>
+              <dd className={cn("num", l.amount < 0 && "text-deal")}>{l.amount < 0 ? `−${formatNaira(-l.amount)}` : formatNaira(l.amount)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
       <div className="flex justify-between gap-3 text-small">
-        <span className="text-muted">{target ? target.name : "Phone you want"}</span>
-        <span className="num">{tv ? formatNaira(tv.price) : "—"}</span>
+        <span className="min-w-0 truncate text-muted">
+          {target?.kind === "product" && targetProduct ? targetProduct.name : target?.kind === "cash" ? "Cash sale" : target?.kind === "custom" ? target.name || "Phone you want" : "Phone you want"}
+        </span>
+        <span className="num shrink-0">{tv ? formatNaira(tv.price) : target?.kind === "custom" ? "TBC" : "—"}</span>
       </div>
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-[15px] font-medium">{payLabel}</span>
-        <span className="num text-[22px] font-medium text-accent">{pay != null ? formatNaira(Math.abs(Math.round(shownPay / 1000) * 1000)) : "—"}</span>
+        <span className={cn("num font-medium text-accent", pay != null ? "text-[22px]" : "text-small")}>{payValue}</span>
       </div>
     </div>
   );
 
   return (
-    <div ref={topRef} className="flex scroll-mt-24 flex-col gap-7 pb-24 lg:pb-0">
+    <div ref={topRef} className="flex scroll-mt-24 flex-col gap-7 pb-32 lg:pb-0">
       {/* Stepper */}
-      <ol className="no-scrollbar flex gap-2 overflow-x-auto">
+      <ol className="grid grid-cols-4 gap-2" aria-label="Progress">
         {STEPS.map((label, i) => {
-          const done = i < step;
+          const done = i < step && stepValid[i];
           const cur = i === step;
-          const reachable = i <= step || (i === 1 && !!sv) || (i === 2 && !!sv && answered === 5) || (i === 3 && !!sv && answered === 5 && !!target);
           return (
-            <li key={label} className="min-w-[132px] flex-1">
+            <li key={label}>
               <button
                 type="button"
-                disabled={!reachable}
+                disabled={!canReach(i)}
                 onClick={() => go(i)}
                 aria-current={cur ? "step" : undefined}
                 className={cn(
-                  "flex w-full items-center gap-2.5 border-b-2 pb-3 text-left text-small font-medium transition-colors",
+                  "flex w-full flex-col items-start gap-2 border-t-[3px] pt-3 text-left text-[13px] font-medium transition-colors md:flex-row md:items-center md:gap-2.5 md:text-small",
                   cur ? "border-accent text-text" : done ? "border-text text-text" : "border-border text-muted",
                 )}
               >
@@ -174,9 +309,9 @@ export function SwapEstimator({
                     cur ? "bg-accent text-on-accent" : done ? "bg-text text-bg" : "bg-surface-2 text-muted",
                   )}
                 >
-                  {i + 1}
+                  {done ? <Check size={14} strokeWidth={2.25} /> : i + 1}
                 </span>
-                <span className="whitespace-nowrap">{label}</span>
+                <span className="leading-tight">{label}</span>
               </button>
             </li>
           );
@@ -184,157 +319,271 @@ export function SwapEstimator({
       </ol>
 
       <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="flex min-w-0 flex-col gap-6">
+        <div className="flex min-w-0 flex-col gap-8">
+          {/* ---------- Step 1: your phone ---------- */}
           {step === 0 && (
             <>
-              <fieldset className="flex flex-col gap-3">
-                <legend className="mb-3 text-h3 font-semibold">Brand</legend>
-                <div className="flex flex-wrap gap-2">
-                  {brands.map((b) => (
-                    <button
-                      key={b}
-                      type="button"
-                      aria-pressed={b === brand}
-                      onClick={() => {
-                        setBrand(b);
-                        setModel(null);
-                        setStorage(null);
-                      }}
-                      className={cn("h-11 rounded-full border px-5 text-[15px] font-medium", b === brand ? "border-accent bg-accent-soft" : "border-border hover:bg-surface")}
-                    >
-                      {b}
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-              <fieldset className="flex flex-col gap-3">
-                <legend className="mb-3 text-h3 font-semibold">Model</legend>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {models.map(([m, up]) => (
-                    <OptionCard
-                      key={m}
-                      selected={m === model}
-                      onClick={() => {
-                        setModel(m);
-                        setStorage(storagesFor(m)[0] ?? null);
-                      }}
-                      layout="column"
-                      className="min-h-[76px] gap-1"
-                    >
-                      <span className="block">{m}</span>
-                      <span className="num block text-micro font-normal text-muted">up to {formatNaira(up)}</span>
-                    </OptionCard>
-                  ))}
-                </div>
-              </fieldset>
-              {model && (
-                <div className="flex max-w-md flex-col gap-3">
-                  <span className="text-h3 font-semibold">Storage</span>
-                  <Segmented label="Storage" mono value={storage ?? ""} onChange={setStorage} options={storagesFor(model).map((s) => ({ value: s, label: s }))} />
+              {mode === "list" ? (
+                <>
+                  <fieldset className="flex flex-col gap-3">
+                    <legend className="mb-3 text-h3 font-semibold">Brand</legend>
+                    <div className="flex flex-wrap gap-2">
+                      {brands.map((b) => (
+                        <button
+                          key={b}
+                          type="button"
+                          aria-pressed={b === brand}
+                          onClick={() => {
+                            setBrand(b);
+                            setModel(null);
+                            setStorage(null);
+                            setModelQ("");
+                          }}
+                          className={cn("h-11 rounded-full border px-5 text-[15px] font-medium", b === brand ? "border-accent bg-accent-soft" : "border-border hover:bg-surface")}
+                        >
+                          {b}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <fieldset className="flex flex-col gap-3">
+                    <legend className="mb-3 flex w-full items-center justify-between gap-3 text-h3 font-semibold">Model</legend>
+                    <label className="relative max-w-sm">
+                      <span className="sr-only">Search models</span>
+                      <Search size={18} strokeWidth={1.5} className="pointer-events-none absolute left-3 top-3 text-muted" />
+                      <input value={modelQ} onChange={(e) => setModelQ(e.target.value)} placeholder={`Search ${brand} models`} className="input pl-10" type="search" />
+                    </label>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      {models.map(([m, up]) => (
+                        <OptionCard
+                          key={m}
+                          selected={m === model}
+                          onClick={() => {
+                            setModel(m);
+                            setStorage(storagesFor(m)[0] ?? null);
+                          }}
+                          layout="column"
+                          className="min-h-[76px] gap-1"
+                        >
+                          <span className="block">{m}</span>
+                          <span className="num block text-micro font-normal text-muted">up to {formatNaira(up)}</span>
+                        </OptionCard>
+                      ))}
+                    </div>
+                    {models.length === 0 && <p className="text-small text-muted">No {brand} models match &ldquo;{modelQ}&rdquo;.</p>}
+                  </fieldset>
+                  {model && (
+                    <div className="flex max-w-md animate-rise flex-col gap-3">
+                      <span className="text-h3 font-semibold">Storage</span>
+                      <Segmented label="Storage" mono value={storage ?? ""} onChange={setStorage} options={storagesFor(model).map((s) => ({ value: s, label: s }))} />
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setMode("custom")}
+                    className="flex items-center gap-3 self-start rounded-card border border-dashed border-border px-4 py-3 text-left text-[15px] hover:bg-surface"
+                  >
+                    <PenLine size={20} strokeWidth={1.5} className="shrink-0 text-accent" />
+                    <span>
+                      <span className="block font-medium">Can&rsquo;t find your phone?</span>
+                      <span className="block text-[13px] text-muted">Type it in and we&rsquo;ll price it for you on WhatsApp.</span>
+                    </span>
+                  </button>
+                </>
+              ) : (
+                <div className="flex max-w-lg animate-rise flex-col gap-4">
+                  <button type="button" onClick={() => setMode("list")} className="flex items-center gap-1 self-start text-small text-muted hover:text-text">
+                    <ChevronLeft size={16} strokeWidth={1.5} />
+                    Back to the list
+                  </button>
+                  <h2 className="text-h3 font-semibold">Tell us about your phone</h2>
+                  <p className="-mt-2 text-small text-muted">Any brand or model works. We&rsquo;ll send you a price on WhatsApp after you answer a few condition questions.</p>
+                  <label className="field">
+                    Brand
+                    <input className="input" value={custom.brand} onChange={(e) => setCustom({ ...custom, brand: e.target.value })} placeholder="e.g. Samsung, Tecno, OnePlus" list="swap-brands" />
+                    <datalist id="swap-brands">
+                      {["Apple", "Samsung", "Google", "Tecno", "Infinix", "Redmi", "Xiaomi", "OnePlus", "Oppo", "Itel"].map((b) => (
+                        <option key={b} value={b} />
+                      ))}
+                    </datalist>
+                  </label>
+                  <label className="field">
+                    Model
+                    <input className="input" value={custom.model} onChange={(e) => setCustom({ ...custom, model: e.target.value })} placeholder="e.g. Galaxy Z Flip 5" />
+                  </label>
+                  <div className="field">
+                    Storage
+                    <Segmented label="Storage" mono value={custom.storage} onChange={(s) => setCustom({ ...custom, storage: s })} options={SWAP_STORAGE_OPTIONS.map((s) => ({ value: s, label: s }))} />
+                  </div>
                 </div>
               )}
             </>
           )}
 
-          {step === 1 &&
-            SWAP_QUESTIONS.map((question) => {
-              const Icon = Q_ICONS[question.icon];
-              return (
-                <fieldset key={question.key} className="flex flex-col gap-3">
-                  <legend className="mb-3 flex items-center gap-2.5 text-h3 font-semibold">
-                    <Icon size={20} strokeWidth={1.5} className="text-muted" />
-                    {question.title}
-                  </legend>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    {question.options.map((o) => {
-                      const sel = answers[question.key] === o.value;
-                      return (
-                        <OptionCard
-                          key={o.value}
-                          selected={sel}
-                          onClick={() => setAnswers((a) => ({ ...a, [question.key]: o.value }))}
-                          icon={sel ? <CircleCheck size={20} strokeWidth={1.5} /> : <Circle size={20} strokeWidth={1.5} />}
-                        >
-                          {o.label}
-                        </OptionCard>
-                      );
-                    })}
-                  </div>
-                </fieldset>
-              );
-            })}
+          {/* ---------- Step 2: condition ---------- */}
+          {step === 1 && (
+            <>
+              <p className="-mb-2 text-small text-muted">Be honest: the final price is confirmed when we see the phone, and accurate answers mean no surprises.</p>
+              {SWAP_QUESTIONS.map((question, qi) => {
+                const Icon = Q_ICONS[question.icon];
+                const done = !!answers[question.key];
+                return (
+                  <fieldset
+                    key={question.key}
+                    ref={(el) => {
+                      qRefs.current[question.key] = el;
+                    }}
+                    className="flex scroll-mt-28 flex-col gap-3"
+                  >
+                    <legend className="mb-3 flex items-center gap-2.5 text-h3 font-semibold">
+                      <span className={cn("flex h-8 w-8 items-center justify-center rounded-full", done ? "bg-accent-soft text-accent" : "bg-surface text-muted")}>
+                        {done ? <Check size={16} strokeWidth={2} /> : <Icon size={18} strokeWidth={1.5} />}
+                      </span>
+                      <span>
+                        <span className="sr-only">Question {qi + 1}: </span>
+                        {question.title}
+                      </span>
+                    </legend>
+                    <div className={cn("grid grid-cols-1 gap-3", question.options.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+                      {question.options.map((o) => {
+                        const sel = answers[question.key] === o.value;
+                        return (
+                          <OptionCard key={o.value} selected={sel} onClick={() => pick(question.key, o.value)} icon={sel ? <CircleCheck size={20} strokeWidth={1.5} /> : <Circle size={20} strokeWidth={1.5} />}>
+                            {o.label}
+                          </OptionCard>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                );
+              })}
+            </>
+          )}
 
+          {/* ---------- Step 3: what you want ---------- */}
           {step === 2 && (
-            <div className="flex flex-col gap-4">
-              <h2 className="text-h3 font-semibold">Which phone do you want?</h2>
+            <div className="flex flex-col gap-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <OptionCard
+                  selected={target?.kind === "cash"}
+                  onClick={() => setTarget({ kind: "cash" })}
+                  icon={<Banknote size={22} strokeWidth={1.5} />}
+                  className="min-h-[72px]"
+                >
+                  <span className="block">Just sell it for cash</span>
+                  <span className="block text-[13px] font-normal text-muted">Paid by transfer after inspection</span>
+                </OptionCard>
+                <OptionCard
+                  selected={target?.kind === "custom"}
+                  onClick={() => setTarget({ kind: "custom", name: target?.kind === "custom" ? target.name : "" })}
+                  icon={<PenLine size={22} strokeWidth={1.5} />}
+                  className="min-h-[72px]"
+                >
+                  <span className="block">The phone I want isn&rsquo;t listed</span>
+                  <span className="block text-[13px] font-normal text-muted">We&rsquo;ll source it and confirm the price</span>
+                </OptionCard>
+              </div>
+              {target?.kind === "custom" && (
+                <label className="field max-w-md animate-rise">
+                  Which phone do you want?
+                  <input className="input" autoFocus value={target.name} onChange={(e) => setTarget({ kind: "custom", name: e.target.value })} placeholder="e.g. iPhone 16 Pro, 256GB, Desert" />
+                </label>
+              )}
+
+              <div className="flex items-center gap-3 pt-2">
+                <span className="h-px flex-1 bg-border" />
+                <span className="text-small text-muted">or swap for a phone in the store</span>
+                <span className="h-px flex-1 bg-border" />
+              </div>
+
               <label className="relative max-w-md">
                 <span className="sr-only">Search phones</span>
                 <Search size={18} strokeWidth={1.5} className="pointer-events-none absolute left-3 top-3 text-muted" />
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the store" className="input pl-10" type="search" />
+                <input value={phoneQ} onChange={(e) => setPhoneQ(e.target.value)} placeholder="Search the store" className="input pl-10" type="search" />
               </label>
               <div className="grid gap-3 sm:grid-cols-2">
                 {filteredPhones.map((p) => {
                   const v = baseVariant(p);
-                  const sel = p.slug === targetSlug;
+                  const sel = target?.kind === "product" && target.slug === p.slug;
                   return (
                     <button
                       key={p.id}
                       type="button"
                       aria-pressed={sel}
-                      onClick={() => setTargetSlug(p.slug)}
-                      className={cn("flex items-center gap-3 rounded-card border-2 p-2.5 text-left", sel ? "border-accent bg-accent-soft" : "border-border hover:bg-surface")}
+                      onClick={() => setTarget({ kind: "product", slug: p.slug, storage: v?.storage ?? null })}
+                      className={cn("flex items-center gap-3 rounded-card border-2 p-2.5 text-left transition-colors", sel ? "border-accent bg-accent-soft" : "border-border hover:bg-surface")}
                     >
-                      <ProductImage src={p.images[0]} alt="" sizes="56px" className="h-14 w-14 shrink-0 rounded-lg" />
+                      <ProductImage src={p.images[0]} alt="" sizes="64px" className="h-16 w-16 shrink-0 rounded-lg" />
                       <span className="flex min-w-0 flex-col gap-0.5">
                         <span className="text-[15px] font-medium">{p.name}</span>
                         <span className="text-micro text-muted">
-                          {conditionLabel(p)} · <span className="num">{v ? formatNaira(v.price) : "—"}</span>
+                          {conditionLabel(p)} · from <span className="num">{v ? formatNaira(v.price) : "—"}</span>
                         </span>
                       </span>
                     </button>
                   );
                 })}
-                {filteredPhones.length === 0 && <p className="text-small text-muted">No phones match that search.</p>}
+                {filteredPhones.length === 0 && <p className="text-small text-muted">No phones match that search. Choose &ldquo;isn&rsquo;t listed&rdquo; above and type it in.</p>}
               </div>
+              {targetProduct && productStorages(targetProduct).length > 1 && target?.kind === "product" && (
+                <div className="flex max-w-md animate-rise flex-col gap-2">
+                  <span className="text-small font-medium">{targetProduct.name} storage</span>
+                  <Segmented
+                    label="Storage of the phone you want"
+                    mono
+                    value={target.storage ?? ""}
+                    onChange={(s) => setTarget({ kind: "product", slug: targetProduct.slug, storage: s })}
+                    options={productStorages(targetProduct).map((s) => ({ value: s, label: s }))}
+                  />
+                </div>
+              )}
             </div>
           )}
 
-          {step === 3 && est && (
-            <div className="flex flex-col gap-4">
+          {/* ---------- Step 4: result ---------- */}
+          {step === 3 && (
+            <div className="flex animate-rise flex-col gap-4">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5 rounded-card border border-border p-5">
                   <span className="text-small text-muted">Your phone is worth</span>
-                  <span className="num text-h2 font-medium">
-                    {formatNaira(est.low)} – {formatNaira(est.high)}
-                  </span>
-                  <span className="text-[13px] text-muted">
-                    {sv?.model} · {sv?.storage}
-                  </span>
+                  <span className="num text-h2 font-medium">{est ? `${formatNaira(est.low)} – ${formatNaira(est.high)}` : "Priced on WhatsApp"}</span>
+                  <span className="text-[13px] text-muted">{phoneLabel}</span>
                 </div>
                 <div className="flex flex-col gap-1.5 rounded-card border border-border p-5">
-                  <span className="text-small text-muted">New phone</span>
-                  <span className="num text-h2 font-medium">{tv ? formatNaira(tv.price) : "—"}</span>
-                  <span className="text-[13px] text-muted">{target ? `${target.name}${tv?.storage ? ` · ${tv.storage}` : ""}` : "No phone chosen"}</span>
+                  <span className="text-small text-muted">{target?.kind === "cash" ? "You get" : "Phone you want"}</span>
+                  <span className="num text-h2 font-medium">{target?.kind === "cash" ? "Cash" : tv ? formatNaira(tv.price) : "Price TBC"}</span>
+                  <span className="text-[13px] text-muted">
+                    {target?.kind === "product" && targetProduct
+                      ? `${targetProduct.name}${tv?.storage ? ` · ${tv.storage}` : ""}`
+                      : target?.kind === "custom"
+                        ? target.name
+                        : "Bank transfer after inspection"}
+                  </span>
                 </div>
               </div>
-              {pay != null && (
-                <div className="flex flex-col gap-1.5 rounded-card bg-accent-soft p-6">
-                  <span className="text-[15px] font-medium">{payLabel}</span>
-                  <span className="num text-[36px] font-medium leading-tight text-accent md:text-[48px]">{formatNaira(Math.abs(Math.round(shownPay / 1000) * 1000))}</span>
-                  <span className="text-[13px] text-muted">Based on the middle of your estimate range.</span>
-                </div>
-              )}
+              <div className="flex flex-col gap-1.5 rounded-card bg-accent-soft p-6">
+                <span className="text-[15px] font-medium">{payLabel}</span>
+                <span className="num text-[36px] font-medium leading-tight text-accent md:text-[48px]">{pay != null ? formatNaira(round1k(shownPay)) : "We'll confirm on WhatsApp"}</span>
+                <span className="text-[13px] text-muted">
+                  {pay != null ? "Based on the middle of your estimate range." : "Send your answers and we'll reply with an exact figure, usually within the hour."}
+                </span>
+              </div>
               <p className="text-[13px] leading-normal text-muted">
                 Final value is confirmed after physical inspection. Bring the phone to the store or we can inspect it on pickup. Estimates are valid for 7 days.
               </p>
               <a href={waLink(settings.whatsapp_number, message)} target="_blank" rel="noopener noreferrer" className="btn btn-whatsapp h-14 w-full text-[17px] hover:no-underline">
                 <MessageCircle size={20} strokeWidth={1.5} />
-                Send swap request on WhatsApp
+                {target?.kind === "cash" ? "Send sell request on WhatsApp" : "Send swap request on WhatsApp"}
               </a>
+              <button type="button" onClick={reset} className="btn btn-ghost self-center text-muted">
+                <RotateCcw size={16} strokeWidth={1.5} />
+                Start a new estimate
+              </button>
             </div>
           )}
 
-          <div className="flex justify-between gap-3 pt-2">
+          {/* Desktop nav */}
+          <div className="hidden justify-between gap-3 pt-2 lg:flex">
             {step > 0 ? (
               <button type="button" onClick={() => go(step - 1)} className="btn btn-secondary btn-lg">
                 Back
@@ -343,8 +592,8 @@ export function SwapEstimator({
               <span />
             )}
             {step < 3 && (
-              <button type="button" disabled={!canNext} onClick={() => go(step + 1)} className="btn btn-primary btn-lg">
-                {step === 2 ? "See my result" : "Continue"}
+              <button type="button" disabled={!stepValid[step]} onClick={() => go(step + 1)} className="btn btn-primary btn-lg">
+                {step === 2 ? "See my offer" : "Continue"}
               </button>
             )}
           </div>
@@ -355,15 +604,30 @@ export function SwapEstimator({
         </aside>
       </div>
 
-      {/* Mobile bottom estimate card */}
-      <div className="fixed inset-x-3 bottom-3 z-30 flex items-center justify-between rounded-card border border-border bg-bg px-4 py-3.5 shadow-float lg:hidden" aria-live="polite">
-        <div className="flex flex-col">
-          <span className="text-micro text-muted">Your phone is worth</span>
-          <span className="num text-[20px] font-medium">{est ? formatNaira(Math.round(shownEst / 1000) * 1000) : "—"}</span>
-        </div>
-        <div className="flex flex-col items-end">
-          <span className="text-micro text-muted">{pay != null && pay < 0 ? "We pay you" : "You pay"}</span>
-          <span className="num text-body font-medium text-accent">{pay != null ? formatNaira(Math.abs(Math.round(shownPay / 1000) * 1000)) : "—"}</span>
+      {/* Mobile: estimate + primary action in the thumb zone */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-bg px-4 pb-[calc(12px+env(safe-area-inset-bottom))] pt-3 lg:hidden">
+        <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-1 flex-col" aria-live="polite">
+            <span className="text-micro text-muted">{step === 3 || pay != null ? payLabel : "Your phone is worth"}</span>
+            <span className={cn("num truncate font-medium", (step === 3 || pay != null ? payValue : estValue).length > 12 ? "text-small" : "text-[20px]", (step === 3 || pay != null) && "text-accent")}>
+              {step === 3 || pay != null ? payValue : estValue}
+            </span>
+          </div>
+          {step > 0 && (
+            <button type="button" onClick={() => go(step - 1)} aria-label="Back" className="btn btn-secondary h-12 w-12 px-0">
+              <ChevronLeft size={20} strokeWidth={1.5} />
+            </button>
+          )}
+          {step < 3 ? (
+            <button type="button" disabled={!stepValid[step]} onClick={() => go(step + 1)} className="btn btn-primary btn-lg px-6">
+              {step === 2 ? "See offer" : step === 1 ? `Continue · ${answered}/5` : "Continue"}
+            </button>
+          ) : (
+            <a href={waLink(settings.whatsapp_number, message)} target="_blank" rel="noopener noreferrer" className="btn btn-whatsapp btn-lg px-5 hover:no-underline">
+              <MessageCircle size={18} strokeWidth={1.5} />
+              Send
+            </a>
+          )}
         </div>
       </div>
     </div>

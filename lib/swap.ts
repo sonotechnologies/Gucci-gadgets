@@ -123,3 +123,27 @@ export function answerLabel(key: keyof SwapAnswers, value: string | undefined): 
   const q = SWAP_QUESTIONS.find((x) => x.key === key);
   return q?.options.find((o) => o.value === value)?.label ?? "—";
 }
+
+export interface BreakdownLine {
+  label: string;
+  amount: number; // negative = deduction
+}
+
+/** Line-by-line explanation of the estimate (shown to the customer for transparency). */
+export function estimateBreakdown(baseValue: number, a: SwapAnswers): BreakdownLine[] {
+  const lines: BreakdownLine[] = [{ label: "Clean, Grade A value", amount: baseValue }];
+  let m = 1;
+  if (a.screen === "minor") {
+    lines.push({ label: "Minor screen scratches", amount: -baseValue * (1 - CONDITION_MULTIPLIERS.minor) });
+    m *= CONDITION_MULTIPLIERS.minor;
+  }
+  if (a.body === "dents") lines.push({ label: "Dents or cracks on body", amount: -baseValue * m * (1 - CONDITION_MULTIPLIERS.dents) });
+  if (a.screen === "cracked") lines.push({ label: "Cracked screen", amount: -baseValue * DEDUCTIONS.cracked });
+  if (a.battery === "80") lines.push({ label: "Battery 80–89%", amount: -baseValue * DEDUCTIONS.battery80 });
+  if (a.battery === "below") lines.push({ label: "Battery below 80%", amount: -baseValue * DEDUCTIONS.batteryBelow });
+  if (a.biometrics === "no") lines.push({ label: "Face ID / fingerprint not working", amount: -baseValue * DEDUCTIONS.biometricsBroken });
+  if (a.repaired === "yes") lines.push({ label: "Repaired before", amount: -baseValue * DEDUCTIONS.repaired });
+  return lines;
+}
+
+export const SWAP_STORAGE_OPTIONS = ["64GB", "128GB", "256GB", "512GB", "1TB"];
